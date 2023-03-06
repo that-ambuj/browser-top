@@ -1,5 +1,7 @@
+use actix_cors::Cors;
+use actix_files as fs;
 use actix_web::{get, web, App, HttpServer, Responder};
-use std::{fmt::Write, sync::Mutex};
+use std::sync::Mutex;
 use sysinfo::{CpuExt, System, SystemExt};
 
 struct AppState {
@@ -12,25 +14,33 @@ async fn main() -> std::io::Result<()> {
         sys: Mutex::new(System::new()),
     });
 
-    HttpServer::new(move || App::new().service(index).app_data(app_state.clone()))
-        .bind(("0.0.0.0", 8000))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        App::new()
+            .service(system_info)
+            .service(
+                fs::Files::new("/", "./frontend/dist/")
+                    .index_file("index.html")
+                    .show_files_listing(),
+            )
+            .wrap(
+                Cors::default()
+                    .allowed_origin("http://localhost:5173")
+                    .allow_any_method(),
+            )
+            .app_data(app_state.clone())
+    })
+    .bind(("0.0.0.0", 8000))?
+    .run()
+    .await
 }
 
-#[get("/")]
-async fn index(state: web::Data<AppState>) -> impl Responder {
-    let mut s = String::new();
-
+#[get("/api/info")]
+async fn system_info(state: web::Data<AppState>) -> impl Responder {
+    // FIXME: It's blocking in async
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_cpu();
 
-    for (i, cpu) in sys.cpus().iter().enumerate() {
-        let i = i + 1;
+    let vec: Vec<_> = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect();
 
-        let usage = cpu.cpu_usage();
-        writeln!(&mut s, "CPU {i}: {usage}").unwrap();
-    }
-
-    s
+    web::Json(vec)
 }
