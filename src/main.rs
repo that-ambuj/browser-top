@@ -5,12 +5,13 @@ use actix_web::{HttpRequest, HttpResponse, Responder};
 use fs::file_extension_to_mime;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::path::PathBuf;
 use std::{thread, time::Duration};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-#[allow(unused_imports)]
 use walkdir::WalkDir;
 
 mod routes;
@@ -22,7 +23,7 @@ const FRONTEND_DIR: &'static str = "./frontend/dist";
 
 // Include built and bundled frontend files inside the binary
 lazy_static! {
-    static ref FILEMAP: HashMap<String, String> = {
+    static ref FILEMAP: HashMap<String, Vec<u8>> = {
         let mut m = HashMap::new();
 
         for file in WalkDir::new(FRONTEND_DIR)
@@ -42,9 +43,15 @@ lazy_static! {
 
             file.file_type();
 
+            let f = File::open(path).unwrap();
+            let mut reader = BufReader::new(f);
+            let mut buffer = Vec::new();
+
+            reader.read_to_end(&mut buffer).unwrap();
+
             m.insert(
                 stripped_path.to_string(),
-                std::fs::read_to_string(path).unwrap(),
+                buffer
             );
         }
         m
@@ -60,7 +67,7 @@ async fn default_html() -> impl Responder {
     if let Some(file_data) = FILEMAP.get("index.html") {
         return HttpResponse::Ok()
             .content_type(ContentType::html())
-            .body(file_data.as_str());
+            .body(file_data.clone());
     }
 
     HttpResponse::NotFound().body("File not found")
@@ -78,7 +85,7 @@ async fn serve_files(req: HttpRequest) -> Result<impl Responder, actix_web::Erro
     if let Some(file_data) = FILEMAP.get(file_name.to_str().unwrap()) {
         return Ok(HttpResponse::Ok()
             .content_type(content_type)
-            .body(file_data.as_str()));
+            .body(file_data.clone()));
     }
 
     Ok(HttpResponse::NotFound().body("File not found"))
