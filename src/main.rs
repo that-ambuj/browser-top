@@ -78,8 +78,6 @@ async fn serve_files(req: HttpRequest) -> Result<impl Responder, actix_web::Erro
     let file_name: PathBuf = req.match_info().query("filename").parse()?;
     let ext = file_name.extension().unwrap().to_str().unwrap();
 
-    tracing::debug!("requested: {file_name:?}");
-
     let content_type = ContentType(file_extension_to_mime(ext));
 
     if let Some(file_data) = FILEMAP.get(file_name.to_str().unwrap()) {
@@ -96,8 +94,7 @@ async fn main() -> std::io::Result<()> {
     // env_logger::init_from_env(Env::default().default_filter_or("trace"));
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "debug".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();

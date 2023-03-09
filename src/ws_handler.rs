@@ -59,8 +59,6 @@ pub async fn cpu_stats_ws(
             Either::Right((right, _)) => match right {
                 // Play ping-pong here and handle closed connections
                 Either::Left((Some(Ok(msg)), _)) => {
-                    log::debug!("msg: {msg:?}");
-
                     match msg {
                         Message::Close(reason) => {
                             break reason;
